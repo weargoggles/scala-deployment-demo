@@ -1,9 +1,9 @@
-import skuber.Container
+import complete.DefaultParsers._
 
 lazy val akkaHttpVersion = "10.1.11"
 lazy val akkaVersion = "2.6.3"
 jibRegistry := "dock.es.ecg.tools"
-jibOrganization := "pe"
+jibOrganization := "pwildsmith"
 jibName := "my-akka-http-project"
 jibTargetImageCredentialHelper := {
   System.getProperty("os.name").toLowerCase match {
@@ -45,41 +45,18 @@ showVersion := {
   println(version.value)
 }
 
-lazy val deploy = taskKey[Unit]("Deploy to current Kubernetes context")
+lazy val deploy = inputKey[Unit]("Deploy to current Kubernetes context")
 deploy := {
-  import scala.util.{Success, Failure}
-  import akka.actor.ActorSystem
-  import akka.stream.ActorMaterializer
-  import skuber.{LabelSelector, ObjectMeta}
-  import skuber.LabelSelector.dsl._
-  import skuber.apps.v1.Deployment
-  import skuber.Pod
-  import skuber.k8sInit
-
-  val imageRef = jibDockerBuild.value
-  implicit val system = ActorSystem()
-  implicit val materializer = ActorMaterializer()
-  implicit val dispatcher = system.dispatcher
-  val k8s = k8sInit
-
-  val deployment = Deployment(
-    metadata = ObjectMeta(name.toString(), labels = Map("app.kubernetes.io/name" -> name.toString())),
-    spec = Some(Deployment.Spec(
-      selector = LabelSelector("app.kubernetes.io/name" is name.toString()),
-      template = Pod.Template.Spec(
-        metadata = ObjectMeta(labels = Map("app.kubernetes.io/name" -> name.toString())),
-        spec = Some(Pod.Spec(
-          containers = List(Container(
-            name = name.toString(),
-            image = imageRef.toString(),
-            ports = List(Container.Port(containerPort = 8080, name = "http")),
-          ))
-        ))
-      )
-    ))
-  )
-  k8s.create[Deployment](deployment).onComplete {
-    case Success(_) => streams.value.log.success("Created deployment!")
-    case Failure(e) => streams.value.log.error("sad face" + e)
+  val parsed: Seq[String] = spaceDelimited("<arg>").parsed
+  parsed match {
+    case Seq(ingressHost) =>
+      val imageRef = jibImageBuild.value
+      Deployer.deploy(jibName.value, ingressHost, imageRef, file("./project/config/reference.conf"))
+    case _ => streams.value.log.error("An ingress hostname should be provided as an argument to 'deploy'")
   }
+}
+
+lazy val listDeployments = taskKey[Unit]("list deployments")
+listDeployments := {
+  Deployer.list("my-akka-http-project", file("./project/config/reference.conf"))
 }

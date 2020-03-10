@@ -40,7 +40,10 @@ object QuickstartApp {
 
       val userRoutes = new UserRoutes(userRegistryActor)(context.system)
       val metricsEndpoint = new MetricsEndpoint(CollectorRegistry.defaultRegistry)
-      val routes = metricsEndpoint.routes ~ userRoutes.userRoutes
+      val helloRoutes = get {
+        complete("hello")
+      }
+      val routes = metricsEndpoint.routes ~ userRoutes.userRoutes ~ helloRoutes
       startHttpServer(routes, context.system)
 
       Behaviors.empty
